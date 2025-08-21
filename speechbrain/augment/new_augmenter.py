@@ -87,9 +87,9 @@ class NewAugmenter(nn.Module):
         batch_copies = []
         length_copies = []
         for _ in range(self.batch_multiplier):
-            batch_copies.append(x)
+            batch_copies.append(x.clone())
             if lengths is not None:
-                length_copies.append(lengths)
+                length_copies.append(lengths.clone())
 
         if self.aug_strategy == "random":
             # random number of augmentation steps for each batch copy

@@ -23,7 +23,7 @@ uppercase: False # Must be True when the TIMIT dataset is in the upper-case vers
 ####################### Training Parameters ####################################
 number_of_epochs: 50
 batch_size: 16
-lr: 0.001
+lr: 0.0011
 sorting: ascending # choose between ascending, descending and random
 
 # Feature parameters
@@ -147,14 +147,16 @@ output: !new:speechbrain.nnet.linear.Linear
 log_softmax: !new:speechbrain.nnet.activations.Softmax
     apply_log: True
 
+weight_decay: 0.04
 opt_class: !name:torch.optim.AdamW
     lr: !ref <lr>
     betas: (0.9,0.95)
-    weight_decay: 0.02
+    weight_decay: !ref <weight_decay>
 
+n_warmup_steps: 1800
 lr_annealing: !new:speechbrain.nnet.schedulers.NoamScheduler
     lr_initial: !ref <lr>
-    n_warmup_steps: 400
+    n_warmup_steps: !ref <n_warmup_steps>
 
 modules:
     model: !ref <model>

@@ -51,6 +51,9 @@ class LID(sb.Brain):
         # Feature extraction and normalization
         feats = self.modules.compute_features(wavs)
         feats = self.modules.mean_var_norm_input(feats, lens)
+        
+        if stage == sb.Stage.TRAIN and hasattr(self.hparams, "fea_augment"):
+            feats, lens = self.hparams.fea_augment(feats, lens)
 
         return feats, lens
 
@@ -107,8 +110,13 @@ class LID(sb.Brain):
         if stage == sb.Stage.TRAIN:
             if hasattr(self.hparams, "wav_augment"):
                 targets = self.hparams.wav_augment.replicate_labels(targets)
-                if hasattr(self.hparams.lr_annealing, "on_batch_end"):
-                    self.hparams.lr_annealing.on_batch_end(self.optimizer)
+                lens = self.hparams.wav_augment.replicate_labels(lens) 
+            if hasattr(self.hparams, "fea_augment"):
+                targets = self.hparams.fea_augment.replicate_labels(targets)
+                lens = self.hparams.fea_augment.replicate_labels(lens)
+            
+            if hasattr(self.hparams.lr_annealing, "on_batch_end"):
+                self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
         loss = self.hparams.compute_cost(predictions, targets)
 
@@ -202,7 +210,7 @@ def dataio_prep(hparams):
     """
 
     # Initialization of the label encoder. The label encoder assigns to each
-    # of the observed label a unique index (e.g, 'lang01': 0, 'lang02': 1, ..)
+    # of the observed label a unique index (e.g, lang01: 0, lang02: 1, ..)
     language_encoder = sb.dataio.encoder.CategoricalEncoder()
 
     # Define audio pipeline
@@ -259,7 +267,7 @@ if __name__ == "__main__":
     sb.utils.distributed.ddp_init_group(run_opts)
 
     # Load hyperparameters file with command-line overrides.
-    with open(hparams_file) as fin:
+    with open(hparams_file, encoding="utf-8") as fin:
         hparams = load_hyperpyyaml(fin, overrides)
 
     # Create experiment directory
@@ -279,14 +287,16 @@ if __name__ == "__main__":
         },
     )
     # Data preparation for augmentation
-    sb.utils.distributed.run_on_main(hparams["prepare_noise_data"])
-    sb.utils.distributed.run_on_main(hparams["prepare_rir_data"])
+    if hasattr(hparams, "prepare_noise_data"):
+        sb.utils.distributed.run_on_main(hparams["prepare_noise_data"])
+    if hasattr(hparams, "prepare_rir_data"):
+        sb.utils.distributed.run_on_main(hparams["prepare_rir_data"])
 
     # Create dataset objects "train", "dev", and "test" and language_encoder
     datasets, language_encoder = dataio_prep(hparams)
 
     # Fetch and load pretrained modules
-    sb.utils.distributed.run_on_main(hparams["pretrainer"].collect_files)
+    hparams["pretrainer"].collect_files()
     hparams["pretrainer"].load_collected()
 
     # Initialize the Brain object to prepare for mask training.
@@ -316,3 +326,4 @@ if __name__ == "__main__":
         min_key="error",
         test_loader_kwargs=hparams["test_dataloader_options"],
     )
+
